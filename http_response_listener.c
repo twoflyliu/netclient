@@ -52,7 +52,7 @@ static void http_response_listener_handle(struct _EventListener UNUSED *thiz, Ev
     if (resp_event->response->protocol != PROTOCOL_HTTP) return; //只处理http协议的响应，不处理其他协议响应
     resp = (HttpResponse*)resp_event->response;
 
-    printf("HTTP PROTCOL: url: %s\n", resp->base.url);
+    printf("\nHTTP PROTCOL: url: %s\n\n", resp->base.url);
     printf("success: %d\n", resp->base.success);
 
     if (resp->base.success) {
@@ -69,7 +69,7 @@ static inline void _show_status_line(HttpResponse *resp)
 
     printf("http version: %s\n", resp->http_version);
     printf("code: %d\n", resp->code); 
-    printf("status: %s\n\n\n", resp->status);
+    printf("status: %s\n\n", resp->status);
 }
 
 static inline void _show_headers(HttpResponse *resp)
@@ -82,7 +82,7 @@ static inline void _show_headers(HttpResponse *resp)
         printf("%s: %s\n", *keys, value);
         ++keys;
     }
-    printf("\n\n");
+    printf("\n");
 }
 
 static inline void _show_content(HttpResponse *resp)

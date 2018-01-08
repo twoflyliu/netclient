@@ -17,7 +17,7 @@
 #define SSL_ERROR() ERR_reason_error_string(ERR_get_error())
 
 #define ERROR(fail, fmt, ...) \
-    if (fail) { \
+    if (!(fail)) { \
         fprintf(stderr, fmt, ##__VA_ARGS__);\
         exit(1);\
     }
@@ -37,7 +37,7 @@ static void openssl_setup()
     SSL_library_init(); // 必须要调用
     
     ssl_ctx = SSL_CTX_new(SSLv23_client_method());
-    ERROR(ssl_ctx == NULL, "ssl ctx new failed!: %s\n", SSL_ERROR());
+    ERROR(ssl_ctx != NULL, "ssl ctx new failed!: %s\n", SSL_ERROR());
     if (!SSL_CTX_load_verify_locations(ssl_ctx, "/usr/ssl/cert.pem", NULL)) {
         ERROR(1, "ssl ctx new failed!: %s\n", SSL_ERROR());
     }

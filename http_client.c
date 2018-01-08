@@ -48,7 +48,7 @@ static void _response_set_success(HttpResponse *resp, StringBuffer *all_resp);
     __HC_LOG(warn, priv, fmt, ##__VA_ARGS__)
 
 #define HC_INFO(priv, fmt, ...) \
-    __HC_LOG(warn, priv, fmt, ##__VA_ARGS__)
+    __HC_LOG(info, priv, fmt, ##__VA_ARGS__)
 
 #define HC_DEBUG(priv, fmt, ...) \
     __HC_LOG(debug, priv, fmt, ##__VA_ARGS__)
@@ -94,7 +94,7 @@ static void _setup_request_headers(ClientPrivInfo *priv, char **req_headers);
 ProtocolClient *http_protocol_client_create(Notifier *notifier,
         void UNUSED *arg, Request *request)
 {
-    ProtocolClient *thiz = (ProtocolClient*)malloc(sizeof(ProtocolClient) + sizeof(ClientPrivInfo));
+    ProtocolClient *thiz = (ProtocolClient*)calloc(sizeof(ProtocolClient) + sizeof(ClientPrivInfo), 1);
     if (thiz != NULL) {
         HttpRequest *req = (HttpRequest*)request;
         ClientPrivInfo *priv = (ClientPrivInfo*)thiz->priv;
@@ -107,7 +107,6 @@ ProtocolClient *http_protocol_client_create(Notifier *notifier,
         thiz->on_idle = http_client_on_idle;
         thiz->destroy = http_client_destroy;
 
-        priv->method = req->method;
         priv->timeout = -1; // 表示不限时
         priv->retry_count = 0; // 表示不进行尝试
         priv->socket = NULL;
@@ -116,10 +115,12 @@ ProtocolClient *http_protocol_client_create(Notifier *notifier,
         priv->buffer = string_buffer_create(100);
         priv->prev_resp_len = 0;
         priv->to_send_request_index = -1;
+
+        priv->method = req->method;
         _setup_request_headers(priv, req->headers); // 只会构建一次
         strcpy(priv->url, req->base.url);
 
-        memcpy(&priv->response, 0, sizeof(priv->response));
+        memset(&priv->response, 0, sizeof(priv->response));
         priv->response.base.protocol = PROTOCOL_HTTP;
         priv->response.base.url = priv->url;
     }
@@ -270,7 +271,8 @@ static ClientStat http_client_on_idle(ProtocolClient *thiz)
 {
     ClientPrivInfo *priv = NULL;
     return_value_if_fail(thiz != NULL, (ClientStat)STAT_FINAL);
-    priv = (ClientPrivInfo*)thiz;
+    priv = (ClientPrivInfo*)thiz->priv;
+    HC_DEBUG(priv, "on_idle: url [%s]", priv->url);
     return (ClientStat)priv->stat;
 }
 
@@ -293,16 +295,17 @@ static int _http_client_init(ClientPrivInfo *priv)
     // 创建socket
     if (priv->socket != NULL) {
         socket_destroy(priv->socket); // 有可能重定向做这个逻辑(所以先关掉原来的然后创建新的)
-        priv->socket = socket_create(0 == strcmp("https", url->scheme));
-        if (url->port == -1) {
-            url->port = (0 == strcmp("http", url->scheme)) ? 80 : 443;
-        }
-        
-        // 重置时间
-        time(&priv->tprev); // 初始化时间
-        _http_client_request_string_init(priv); // 初始化请求字符串
-        priv->prev_resp_len = 0;
     }
+
+    priv->socket = socket_create(0 == strcmp("https", url->scheme));
+    if (url->port == -1) {
+        url->port = (0 == strcmp("http", url->scheme)) ? 80 : 443;
+    }
+    
+    // 重置时间
+    time(&priv->tprev); // 初始化时间
+    _http_client_request_string_init(priv); // 初始化请求字符串
+    priv->prev_resp_len = 0;
 
     return STAT_INIT;
 }
@@ -335,7 +338,7 @@ static void _http_client_request_string_init(ClientPrivInfo *priv)
 
     // 构建请求头
     if (priv->request_headers != NULL && (keys = http_headers_keys(priv->request_headers)) != NULL) {
-        while (keys != NULL) {
+        while (*keys != NULL) {
             value = http_headers_get(priv->request_headers, *keys);
             if (value != NULL) {
                 n = snprintf(buf, BUFSIZ - 1, "%s: %s\r\n", *keys, value);
@@ -355,6 +358,7 @@ static int _http_client_connect(ClientPrivInfo *priv, int *fd, int *want_read, i
 {
     *fd = -1;
     *want_read = *want_write = 0;
+    HC_DEBUG(priv, "Try to connect server [%s]!", priv->url);
     if (socket_connect(priv->socket, priv->rurl.host, priv->rurl.port) <= 0) {
         if (!socket_should_retry(priv->socket)) {
             HC_ERROR2(priv, "Connect to server [%s] failed!: %s", priv->url, socket_error(priv->socket));
@@ -426,9 +430,12 @@ static int _http_client_receive_response(ClientPrivInfo *priv, int *fd, int *wan
 
     *fd = -1;
     *want_read = *want_write = 0;
+
+    HC_DEBUG(priv, "try to receive response from server [%s]", priv->url);
     n = socket_read(priv->socket, buf, BUFSIZ);
     if (n == 0) {
         // 表明服务器端关闭了，因为使用HTTP/1.0 或者使用HTTP/2.0，但是将Keep-Alive设置为close, 所以关闭就表示传输结束
+        HC_INFO(priv, "received all response from server [%s]", priv->url);
         priv->stat = STAT_FINAL;
         _response_set_success(&priv->response, priv->buffer);
     } else if (n > 0) {
@@ -507,7 +514,7 @@ static const char * _response_parse_status_line(HttpResponse *resp,
 
     cursor= strchr(cursor, ' ');
     cursor= _skip_white_space(cursor);
-    resp->http_version =cursor;
+    resp->status = cursor;
 
     cursor= strchr(cursor, '\r');
     *(char*)cursor= '\0';
@@ -568,7 +575,7 @@ static int _http_client_redirect(ClientPrivInfo *priv, int *fd, int *want_read, 
     return_value_if_fail(priv->response.base.success && priv->response.response_headers != NULL, STAT_FINAL);
     new_location = http_headers_get(priv->response.response_headers, "Location");
     return_value_if_fail(new_location != NULL, STAT_FINAL);
-    HC_DEBUG(priv, "Server from [%s] redirect to [%s]\n", priv->url, new_location);
+    HC_INFO(priv, "Server from [%s] redirect to [%s]\n", priv->url, new_location);
     strcpy(priv->url, new_location);
 
     if (STAT_FINAL == _http_client_init(priv)) return STAT_FINAL;

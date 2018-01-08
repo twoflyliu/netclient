@@ -113,7 +113,8 @@ void net_client_push_request(NetClient *thiz, Request *request)
     return_if_fail(thiz != NULL && request != NULL);
     creator = &thiz->creators[request->protocol];
     return_if_fail(creator->creator != NULL);
-    list_push_back(thiz->clients, creator->creator(thiz->notifier, creator->arg, request)); // 增加任务
+    list_push_back(thiz->clients, 
+            creator->creator(thiz->notifier, creator->arg, request)); // 增加任务
 }
 
 /*!
@@ -123,10 +124,11 @@ void net_client_push_request(NetClient *thiz, Request *request)
  */
 void net_client_do_all(NetClient *thiz)
 {
-    int i, fd, ret, want_read, want_write;
+    int i, ofd, fd, ret, want_read, want_write;
     ProtocolClient *client = NULL;
     Iterator *iter = NULL;
-    return_if_fail(thiz != NULL && list_size(thiz->clients) == 0);
+    return_if_fail(thiz != NULL);
+    if (list_size(thiz->clients) == 0) return;
 
     // 首先进行第一轮处理话，主要是为了获取获取文件描述符，并且进行第一次多路复用
     i = 0;
@@ -146,16 +148,22 @@ void net_client_do_all(NetClient *thiz)
         for (iter = list_begin(thiz->clients); !iter->is_done(iter) 
                 && i < thiz->max_concurrency; ) {
             client = (ProtocolClient*)iterator_data(iter);
-            fd = client->get_sockfd(client);
+            ofd = fd = client->get_sockfd(client);
             if (selector_can_read(thiz->selector, fd) || selector_can_write(thiz->selector, fd)) {
                 ret = client->handle(client, &fd, &want_read, &want_write);
-                if (want_read) {
-                    selector_rm_write(thiz->selector, fd); // 因为不确定之前是否绑定他了，所以使用这种笨方法
-                    selector_add_read(thiz->selector, fd);
-                }
-                if (want_write) {
-                    selector_rm_read(thiz->selector, fd);
-                    selector_add_write(thiz->selector, fd);
+                if (fd >= 0) {
+                    if (ofd != fd) { //说明内部发生了重定向
+                        selector_rm_read(thiz->selector, ofd);
+                        selector_rm_write(thiz->selector, ofd);
+                    }
+                    if (want_read) {
+                        selector_rm_write(thiz->selector, fd); // 因为不确定之前是否绑定他了，所以使用这种笨方法
+                        selector_add_read(thiz->selector, fd);
+                    }
+                    if (want_write) {
+                        selector_rm_read(thiz->selector, fd);
+                        selector_add_write(thiz->selector, fd);
+                    }
                 }
             } else {
                 ret = client->on_idle(client);

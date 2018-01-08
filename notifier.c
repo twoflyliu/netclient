@@ -35,6 +35,13 @@ void notifier_destroy(Notifier *thiz)
     free(thiz);
 }
 
+static void
+event_listener_destroy(EventListener *thiz)
+{
+    return_if_fail(thiz != NULL);
+    thiz->destroy(thiz);
+}
+
 static inline List* notifier_get_list(Notifier *thiz, int protocol)
 {
     List *list = thiz->listeners[protocol];

@@ -18,11 +18,5 @@ typedef struct _EventListener {
     char priv[0];
 } EventListener;
 
-static void
-event_listener_destroy(EventListener *thiz)
-{
-    return_if_fail(thiz != NULL);
-    thiz->destroy(thiz);
-}
 
 #endif //EVENT_LISTENER_H_H

@@ -26,9 +26,10 @@ static inline void notifier_log(int logger_level, Notifier *notifier, Protocol p
     event.line = line;
     event.level = logger_level;
 
-    n = snprintf(message, sizeof(message) - 1, format, va);
+    n = vsnprintf(message, sizeof(message) - 1, format, va);
     if ('\n' != message[n]) message[n++] = '\n'; // 保证每行日志占用一行
     message[n] = '\0';
+    event.message = message;
     notifier_notify(notifier, (Event*)&event);
 }
 

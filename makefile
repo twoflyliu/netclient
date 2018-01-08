@@ -1,6 +1,8 @@
 SOURCES = $(wildcard *.c)
 OBJECTS = $(patsubst %.c,%.o,$(SOURCES))
 
+CFLAGS = -Wall -g
+
 all: app
 
 app: LOADLIBS = -lssl -lcrypto

@@ -8,7 +8,7 @@
 #include "util.h"
 
 typedef enum _LoggerLevel {
-    LOGGER_FATAL, //!< 致命错误要退出程序
+    LOGGER_FATAL=0, //!< 致命错误要退出程序
     LOGGER_ERROR, //!< 普通错误
     LOGGER_WARN,  //!< 警告
     LOGGER_INFO,  //!< 普通信息

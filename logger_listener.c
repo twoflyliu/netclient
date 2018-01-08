@@ -6,6 +6,7 @@
 */
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 
 #include "util.h"
@@ -37,9 +38,11 @@ EventListener* logger_listener_create(int logger_level, FILE *fp)
 
 static void logger_event_listener_destroy(struct _EventListener *thiz)
 {
-    EventListenerPriv *priv = (EventListenerPriv*)thiz;
+    EventListenerPriv *priv = (EventListenerPriv*)thiz->priv;
     if (thiz != NULL) {
-        if (priv->fp != stdout || priv->fp != stderr) fclose(priv->fp); 
+        if (priv->fp != stdout && priv->fp != stderr) {
+            fclose(priv->fp);
+        }
         free(thiz);
     }
 }
@@ -62,9 +65,10 @@ static inline void _log(EventListenerPriv *priv, LoggerEvent *event)
 {
     time_t now;
     char buf[BUFSIZ];
-    if (priv->logger_level <= event->level) {
+    if (priv->logger_level >= event->level) {
         time(&now);
         ctime_r(&now, buf);
+        buf[strlen(buf)-1] = '\0'; // 把最后的\n给移除掉
         fprintf(priv->fp, "%s [%s]: %s", buf, 
                 logger_level_string((LoggerLevel)event->level), event->message);
         fflush(priv->fp); // 只是简单输出

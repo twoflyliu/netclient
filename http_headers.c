@@ -61,6 +61,7 @@ static void http_header_append_value(HttpHeader *thiz, const char *value)
 struct _HttpHeaders {
     List *headers;
     char keys[1024];
+    char *pkeys[100];
 };
 
 HttpHeaders *http_headers_create()
@@ -119,15 +120,18 @@ const char** http_headers_keys(HttpHeaders *thiz)
     Iterator *iter = NULL;
     HttpHeader *header = NULL;
     int offset = 0;
+    int i = 0;
     return_value_if_fail(thiz != NULL, NULL);
     thiz->keys[0] = '\0';
     for (iter = list_begin(thiz->headers); !iterator_is_done(iter); iterator_next(iter)) {
         header = (HttpHeader*)iterator_data(iter);
         strcpy(thiz->keys + offset, header->key);
+        thiz->pkeys[i++] = (thiz->keys + offset);
         offset += strlen(header->key) + 1; // 跳过'\0'
     }
     if (iter) iterator_destroy(iter);
-    return (const char**)thiz->keys;
+    thiz->pkeys[i] = NULL;
+    return (const char**)thiz->pkeys;
 }
 
 const char* http_headers_get(HttpHeaders *thiz, const char *key)
@@ -155,9 +159,16 @@ int main(void)
     http_headers_remove(headers, "Host");
     assert(NULL == http_headers_get(headers, "Host"));
 
+    http_headers_add(headers, "Host", "www.baidu.com");
+
     http_headers_add(headers, "Cookie", "username=ffx;");
     http_headers_add(headers, "Cookie", "password=ffx;");
     assert(0 == strcmp("username=ffx;password=ffx;", http_headers_get(headers, "Cookie")));
+
+    const char **keys = http_headers_keys(headers);
+    assert(0 == strcmp("Host", keys[0]));
+    assert(0 == strcmp("Cookie", keys[1]));
+    assert(NULL == keys[2]);
 
     http_headers_destroy(headers);
     return 0;
