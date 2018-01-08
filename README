@@ -1,0 +1,90 @@
+使用c语言来设计一套框架来满足对于不同对于不同应用层网络协议的基本客户端支持。
+
+比如：
+http协议，支持发送请求，获取响应
+ftp协议，支持发送请求，获取响应
+
+终止协议之间都是一问一答方法，只有协议自己知道数据是否传输完，或者响应是否接受完
+
+结构体Task(他是可变的类型，比如HttpTask, FtpTask, SmtpTask...)
+int protocal协议类型
+const char *url 任务url
+int state 当前状态
+char *response 所有从服务器接收到的信息
+int left_retry_cnt 剩余尝试次数
+
+具体：HttpTask, FtpTask, SmtpTask ...
+
+接口Client
+功能： 推进内部协议之间的应答，并且返回对应的状态，可以是在处理中，可以是出错，可以是结束
+int do();                   // 进行任务，返回任务进行的状态
+size_t increment_bytes();    // 返回内部接收到响应的数据增量，主要返回是为了提供检测下载速度的手段
+
+具体：HttpClient, FtpClient ...
+
+接口Observer 
+功能： 用来跟踪当前任务的进度情况，比如进行到哪一步了，出错了吗，完成了吗
+int on_error(Task *task, const char *errmsg);
+int on_success(Task *task, Response *response);
+int on_change_state(Task *task, int old_state, int new_state);
+int on_timeout(Task *task)
+int on_retry(Task *task)
+int on_rate_changed(Task *task, const char *rate)
+
+具体DummyObserver HttpPaserObserver GeneralLoggerObserver ...
+
+接口NetClient
+功能：管理Client和Observer，分派，推动整个任务进行下去
+Client和Observer进行交互
+void add_client(thiz, int protocol, Client *client);
+//void remove_client(thiz, int protocal, Client *client);
+void add_observer(thiz, int type, Observer *observer);
+//void remove_observer(thiz, int type, Observer *observer);
+
+void dispatch_error(thiz, const char *errmsg);
+void dispatch_success(thiz, Task *task);
+void dispatch_change_state(thiz, Task *task);
+void dispatch_timeout(thiz, Task *task);
+void dispatch_rate_change(thiz, Task *task, const char *rate);
+
+void settimeout()
+void setretrycount()
+
+void add_task(thiz, Task *task);
+void wait_all(thiz); // 等待所有任务完成
+
+接口Selector
+功能：功能用来提供检测多路复用的统一接口，主要是为了以后可能兼容windows平台考虑
+并且比原始linux select好的地方，他维护读写集合状态，除非用户手动remove, 才不会继续监听
+void add/remove_read(thiz, int fd);
+void add/remove_write(thiz, int fd);
+int can_read(thiz, inf fd);
+int can_write(thiz, int fd);
+int select();
+
+接口Socket
+功能：异步套接字接口，主要用来屏蔽可能的普通和加密套接字的区别
+Socket *socket_create()
+void socket_destroy(thiz)
+int connect(thiz, const char *host, int port)
+int send(thiz, void *buf, int buflen);
+int receive(thiz, void *buf, int* buflen);
+int would_block(thiz)
+
+类HttpClient, HttpParser, HttpBuilder
+
+HttpParser
+void add_response(thiz, response)
+int all_headers_parsed(thiz)
+const char * get_header(thiz, header_name)
+int get_result(thiz)
+
+HttpBuilder
+void on_header(thiz, header_name, header_value)
+void on_response(thiz, response)
+int get_result(thiz)
+
+具体的门面(用户类)
+接口HttpRequest
+int get(const char *url, char **headers, struct response *resp);
+int post(const char *url, void *data, struct response *resp);
