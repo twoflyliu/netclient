@@ -64,7 +64,7 @@ struct _ProtocolClient {
     /*!
      *  \brief on_timed 提供这种函数方便用来检测内部自身是否超时终止了 
      */
-    ClientStat (*on_idle)(ProtocolClient *thiz);
+    ClientStat (*on_idle)(ProtocolClient *thiz, int *fd, int *want_read, int *want_write);
 
     /*
      *  \brief destroy 析构函数

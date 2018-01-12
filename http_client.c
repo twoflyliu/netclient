@@ -54,11 +54,11 @@ static void _response_set_success(HttpResponse *resp, StringBuffer *all_resp);
     __HC_LOG(debug, priv, fmt, ##__VA_ARGS__)
 
 static int http_client_handle(ProtocolClient *thiz, int *fd, int *want_read, int *want_write);
+static ClientStat http_client_on_idle(ProtocolClient *thiz, int *fd, int *want_read, int *want_write);
 static int http_client_get_sockfd(ProtocolClient *thiz);
 static void http_client_set_timeout(ProtocolClient *thiz, int sec);
 static void http_client_set_retry_count(ProtocolClient *thiz, int retry_count);
 static int http_client_get_resp_incre_len(ProtocolClient *thiz);
-static ClientStat http_client_on_idle(ProtocolClient *thiz);
 static void http_client_destroy(ProtocolClient *thiz);
 
 enum {
@@ -267,12 +267,31 @@ static int http_client_get_resp_incre_len(ProtocolClient *thiz)
     return 0;
 }
 
-static ClientStat http_client_on_idle(ProtocolClient *thiz)
+static ClientStat http_client_on_idle(ProtocolClient *thiz, int *fd, int *want_read, int *want_write)
 {
     ClientPrivInfo *priv = NULL;
     return_value_if_fail(thiz != NULL, (ClientStat)STAT_FINAL);
     priv = (ClientPrivInfo*)thiz->priv;
     HC_DEBUG(priv, "on_idle: url [%s]", priv->url);
+
+    if (_http_client_is_timeout(priv)) {
+        if (priv->retry_count > 0) {
+            --priv->retry_count;
+            _http_client_refresh(priv, fd, want_read, want_write);
+        } else {
+            _response_set_error(&priv->response, "Timeout");
+            priv->stat = STAT_FINAL;
+        }
+    }
+
+    if (STAT_FINAL == priv->stat) { // 如果终止的话，则要发送响应事件
+        ResponseEvent event;
+        event.base.event_type = EVENT_TYPE_RESPONSE;
+        event.base.protocol = PROTOCOL_HTTP;
+        event.base.url = priv->url;
+        event.response = (Response*)&priv->response;
+        notifier_notify(priv->notifier, (Event*)&event);
+    }
     return (ClientStat)priv->stat;
 }
 

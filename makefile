@@ -1,33 +1,33 @@
 SOURCES = $(wildcard *.c)
 OBJECTS = $(patsubst %.c,%.o,$(SOURCES))
 
+TEST_FILES = test_util test_list test_http_headers test_socket_openssl
+
 CFLAGS = -Wall -g
+LOADLIBS = -lssl -lcrypto
 
 all: app
 
-app: LOADLIBS = -lssl -lcrypto
 app: $(OBJECTS)
 	gcc -o $@ $^ $(LOADLIBS)
 
-test: test_util test_list test_http_headers
+# 因为有些文件有其他依赖，可以用工具生成，或者手写
+test_http_headers: list.o
 
-test_util: CFLAGS = -DTEST_UTIL -Wall -g
-test_util: util.o
-	gcc -o $@ $^
+# 生成测试，运行测试
+test: test_exe_files = $(patsubst %,./%;,$^)
+test: $(TEST_FILES)
+	$(test_exe_files)
 
-test_list: CFLAGS = -DTEST_LIST -Wall -g
-test_list: list.o
-	gcc -o $@ $^
+test_%: %_t.o
+	gcc -o $@ $^ $(LOADLIBS)
 
-test_http_headers: CFLAGS = -DTEST_HTTP_HEADERS -Wall -g
-test_http_headers: http_headers.o list.o
-	gcc -o $@ $^
-
-test_string_buffer: CFLAGS = -DTEST_STRING_BUFFER -Wall -g
-test_string_buffer: string_buffer.o
-	gcc -o $@ $^
+# 测试版本匹配规则
+%_t.o: CFLAGS = -DTEST_$(shell echo $(patsubst %.c,%,$<) | tr a-z A-Z) -g -Wall
+%_t.o: %.c
+	gcc $(CFLAGS) -c -o $@ $^
 
 .PHONY: test clean
 
 clean:
-	$(RM) *.o
+	$(RM) *.o  *.exe

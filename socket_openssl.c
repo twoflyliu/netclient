@@ -156,5 +156,90 @@ int socket_read(Socket *thiz, void *buf, int buflen)
 int socket_get_fd(Socket *thiz)
 {
     return_value_if_fail(thiz != NULL, -1);
+    if (NULL == thiz->bio) {
+        return -1;
+    }
     return BIO_get_fd(thiz->bio, NULL);
 }
+
+#ifdef TEST_SOCKET_OPENSSL
+
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
+
+#include <assert.h>
+#include <string.h>
+#include <unistd.h>
+#include <stdio.h>
+
+void test_create_destroy()
+{
+    Socket *socket = socket_create(1);
+    assert(socket != NULL);
+    socket_destroy(socket);
+}
+
+void test_get_fd()
+{
+    Socket *socket = socket_create(1);
+    assert(-1 == socket_get_fd(socket));
+    socket_connect(socket, "www.37zw.net", 80);
+    assert(socket_get_fd(socket) >= 0);
+    socket_destroy(socket);
+}
+
+void test_normal_use()
+{
+    char buf[BUFSIZ] = {"GET / HTTP/1.0\r\nHost: www.ifeng.net\r\n\r\n"};
+    const char *host = "www.ifeng.com";
+    Socket *socket = socket_create(0);
+    int index = 0;
+    int buflen = strlen(buf);
+    int ret = 0;
+
+    assert(socket != NULL);
+
+    // 连接服务器, 因为是异步，所以一直等待成功
+    while (socket_connect(socket, host, 80) <= 0) {
+        assert(socket_should_retry(socket));
+        usleep(1000 * 100); //睡眠100ms 防止拖累cpu
+    }
+
+    // 发送数据
+    for (;;) {
+        ret = socket_write(socket, buf + index, buflen - index);
+        if (ret <= 0) {
+            assert(socket_should_retry(socket));
+            usleep(1000 * 100); //睡眠100ms 防止拖累cpu
+        } else {
+            index += ret;
+            if (index == buflen) break; // 这儿这样设计防止数据没有一次性发送过去
+        }
+    }
+
+    // 接收数据
+    for (;;) {
+        ret = socket_read(socket, buf, sizeof(buf));
+        if (ret < 0) { // 失败
+            assert(socket_should_retry(socket));
+            usleep(1000 * 100); //睡眠100ms 防止拖累cpu
+        } else  if(0 == ret) { // 表示连接被关闭
+            break;
+        } else { // 表示成功
+
+        }
+    }
+    assert(socket_get_fd(socket) > -1); 
+    socket_destroy(socket);
+}
+
+int main(void)
+{
+    test_create_destroy();
+    test_get_fd();
+    test_normal_use();
+    return 0;
+}
+
+#endif

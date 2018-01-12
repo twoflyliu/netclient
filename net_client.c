@@ -5,6 +5,7 @@
 * Create time: 2018 01 05 17:48:54
 */
 #include <stdlib.h>
+#include <assert.h>
 
 #include "util.h"
 #include "net_client.h"
@@ -130,6 +131,8 @@ void net_client_do_all(NetClient *thiz)
     return_if_fail(thiz != NULL);
     if (list_size(thiz->clients) == 0) return;
 
+    /*thiz->max_concurrency = 1; // 方便并发测试*/
+
     // 首先进行第一轮处理话，主要是为了获取获取文件描述符，并且进行第一次多路复用
     i = 0;
     for (iter = list_begin(thiz->clients); !iter->is_done(iter) 
@@ -149,10 +152,11 @@ void net_client_do_all(NetClient *thiz)
                 && i < thiz->max_concurrency; ) {
             client = (ProtocolClient*)iterator_data(iter);
             ofd = fd = client->get_sockfd(client);
-            if (selector_can_read(thiz->selector, fd) || selector_can_write(thiz->selector, fd)) {
+            // fd < 0表明还没有建立新建（是新任务），另外两个条件表明真正可以进度读写操作
+            if (fd < 0 || selector_can_read(thiz->selector, fd) || selector_can_write(thiz->selector, fd)) {
                 ret = client->handle(client, &fd, &want_read, &want_write);
-                if (fd >= 0) {
-                    if (ofd != fd) { //说明内部发生了重定向
+                if (fd >= 0) { // 如果fd返回-1，表明任务已经结束
+                    if (ofd > -1 && ofd != fd) { //说明内部发生了重定向
                         selector_rm_read(thiz->selector, ofd);
                         selector_rm_write(thiz->selector, ofd);
                     }
@@ -166,11 +170,12 @@ void net_client_do_all(NetClient *thiz)
                     }
                 }
             } else {
-                ret = client->on_idle(client);
+                ret = client->on_idle(client, &fd, &want_read, &want_write); // 内部可以进行超时重连
             }
 
             if (CLIENT_STAT_FINAL == ret) {
                 fd = client->get_sockfd(client);
+                assert(fd > 0);
                 selector_rm_read(thiz->selector, fd);
                 selector_rm_write(thiz->selector, fd);
                 iterator_erase(iter); // 因为处理完了所以删除任务
