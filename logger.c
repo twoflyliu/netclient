@@ -7,6 +7,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "util.h"
 #include "logger.h"
@@ -97,3 +98,20 @@ const char * logger_level_string(LoggerLevel level)
             return "UNKOWN";
     }
 }
+
+int logger_level_from_string(const char *level_string)
+{
+    return_value_if_fail(level_string != NULL, -1);
+    if (0 == strcmp("fatal", level_string)) {
+        return LOGGER_FATAL;
+    } else if (0 == strcmp("error", level_string)) {
+        return LOGGER_ERROR;
+    } else if (0 == strcmp("warn", level_string)) {
+        return LOGGER_WARN;
+    } else if (0 == strcmp("info", level_string)) {
+        return LOGGER_INFO;
+    } else if (0 == strcmp("debug", level_string)) {
+        return LOGGER_DEBUG;
+    }
+    return -1;
+} 

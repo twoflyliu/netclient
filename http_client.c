@@ -81,6 +81,7 @@ typedef struct _ClientPrivInfo {
     Url rurl;
     Socket *socket;
     HttpHeaders *request_headers;
+    StringBuffer *request_data;
     Notifier *notifier;
 
     StringBuffer *buffer;           //!< 可以自动增加尺寸的缓冲区
@@ -90,11 +91,12 @@ typedef struct _ClientPrivInfo {
     HttpResponse response;
 } ClientPrivInfo;
 
-static void _setup_request_headers(ClientPrivInfo *priv, char **req_headers);
+static void _setup_request_headers(ClientPrivInfo *priv, HttpRequest *request);
 ProtocolClient *http_protocol_client_create(Notifier *notifier,
         void UNUSED *arg, Request *request)
 {
     ProtocolClient *thiz = (ProtocolClient*)calloc(sizeof(ProtocolClient) + sizeof(ClientPrivInfo), 1);
+    HttpRequest *http_request = (HttpRequest*)request;
     if (thiz != NULL) {
         HttpRequest *req = (HttpRequest*)request;
         ClientPrivInfo *priv = (ClientPrivInfo*)thiz->priv;
@@ -117,12 +119,23 @@ ProtocolClient *http_protocol_client_create(Notifier *notifier,
         priv->to_send_request_index = -1;
 
         priv->method = req->method;
-        _setup_request_headers(priv, req->headers); // 只会构建一次
         strcpy(priv->url, req->base.url);
+
+        // 初始化请求数据
+        if (NULL != http_request->data) {
+            priv->request_data = string_buffer_create(http_request->datalen + 1);
+            string_buffer_append_data(priv->request_data, http_request->data,
+                    http_request->datalen);
+        } else {
+            priv->request_data = NULL;
+        }
+
+        _setup_request_headers(priv, http_request); // 只会构建一次
 
         memset(&priv->response, 0, sizeof(priv->response));
         priv->response.base.protocol = PROTOCOL_HTTP;
         priv->response.base.url = priv->url;
+        priv->response.request_method = http_request->method;
     }
     return thiz;
 }
@@ -136,6 +149,7 @@ static void http_client_destroy(ProtocolClient *thiz)
     if (priv->response.response_headers != NULL) http_headers_destroy(priv->response.response_headers);
     if (priv->socket) socket_destroy(priv->socket);
     if (priv->buffer) string_buffer_destroy(priv->buffer);
+    if (priv->request_data) string_buffer_destroy(priv->request_data);
     free(thiz);
 }
 
@@ -165,18 +179,43 @@ static void http_client_set_retry_count(ProtocolClient *thiz, int retry_count)
 }
 
 // 将常见的{"Host", "www.baidu.com", NULL} 构造成HttpHeaders对象
-static void _setup_request_headers(ClientPrivInfo *priv, char **req_headers)
+static void _setup_request_headers(ClientPrivInfo *priv, HttpRequest *request)
 {
-    HttpHeaders *headers  = NULL;
-    headers = http_headers_create();
-    if (req_headers != NULL) {
-        while (*req_headers != NULL) {
-            return_if_fail(*(req_headers + 1) != NULL); // 下一个元素就是value, 当前是key
-            http_headers_add(headers, *req_headers, *(req_headers + 1));
-            req_headers += 2;
+    assert(HTTP_HEADERS_TYPE_ARR == request->headers_type 
+            || HTTP_HEADERS_TYPE_MAP == request->headers_type
+            || HTTP_HEADERS_TYPE_NONE == request->headers_type);
+    if (HTTP_HEADERS_TYPE_MAP == request->headers_type) {
+        priv->request_headers = request->map_headers;
+        request->map_headers = NULL; //将数据move过来
+    } else if (HTTP_HEADERS_TYPE_ARR == request->headers_type) {
+        HttpHeaders *headers  = NULL;
+        char **req_headers = request->array_headers;
+        headers = http_headers_create();
+        if (req_headers != NULL) {
+            while (*req_headers != NULL) {
+                return_if_fail(*(req_headers + 1) != NULL); // 下一个元素就是value, 当前是key
+                http_headers_add(headers, *req_headers, *(req_headers + 1));
+                req_headers += 2;
+            }
+        }
+        priv->request_headers = headers;
+    } else {
+        assert(HTTP_HEADERS_TYPE_NONE == request->headers_type);
+        priv->request_headers = http_headers_create(); //必须要有
+    }
+
+    // 补全POST请求头
+    if (HTTP_REQUEST_METHOD_POST == priv->method) {
+        if (!http_headers_has(priv->request_headers, "Content-Type")) {
+            http_headers_add(priv->request_headers, "Content-Type", DEFAULT_POST_CONTENT_TYPE);
+        }
+        if (!http_headers_has(priv->request_headers, "Content-Length")) {
+            char buf[50];
+            int n = snprintf(buf, sizeof(buf), "%d", (int)string_buffer_size(priv->request_data)); //32位系统上size_t是4个字节
+            buf[n] = '\0';
+            http_headers_add(priv->request_headers, "Content-Length", buf);
         }
     }
-    priv->request_headers = headers;
 }
 
 static int _http_client_connect(ClientPrivInfo *priv, int *fd, int *want_read, int *want_write);
@@ -311,6 +350,10 @@ static int _http_client_init(ClientPrivInfo *priv)
     http_headers_remove(priv->request_headers, "Host");
     http_headers_add(priv->request_headers, "Host", url->host); //重定向后可能主机名也会变调，所以这儿强制更新
 
+    if (!http_headers_has(priv->request_headers, "User-Agent")) {
+        http_headers_add(priv->request_headers, "User-Agent", DEFAULT_USER_AGENT);
+    }
+
     // 创建socket
     if (priv->socket != NULL) {
         socket_destroy(priv->socket); // 有可能重定向做这个逻辑(所以先关掉原来的然后创建新的)
@@ -370,6 +413,14 @@ static void _http_client_request_string_init(ClientPrivInfo *priv)
         }
     }
     string_buffer_append(priv->buffer, "\r\n"); //连续两个\r\n\r\n表示终止字符
+
+    // 构建请求实体（如果是POST请求的话）
+    if (HTTP_REQUEST_METHOD_POST == priv->method &&
+            NULL != priv->request_data && string_buffer_size(priv->request_data) > 0) {
+        string_buffer_append_data(priv->buffer, string_buffer_c_str(priv->request_data),
+                string_buffer_size(priv->request_data));
+        string_buffer_append(priv->buffer, "\r\n");  //请求实体也是以\r\n进行分割
+    }
     priv->to_send_request_index = 0;
 }
 
@@ -584,7 +635,7 @@ static void _response_parse_response_data(HttpResponse *resp,
 
 static inline const char * _skip_white_space(const char *cursor)
 {
-    while (*cursor != '\0' && isspace(*cursor)) ++cursor;
+    while (*cursor != '\0' && isspace((int)*cursor)) ++cursor;
     return cursor;
 }
 
@@ -614,3 +665,35 @@ static int _http_client_is_timeout(ClientPrivInfo *priv)
     time(&now);
     return (priv->timeout) > 0 ? ((now - priv->tprev) > priv->timeout) : 0;
 }
+
+int http_request_method_from_string(const char *method)
+{
+    if (0 == _stricmp(method, "GET")) {
+        return HTTP_REQUEST_METHOD_GET;
+    } else if (0 == _stricmp(method, "POST")) {
+        return HTTP_REQUEST_METHOD_POST;
+    } else if (0 == _stricmp(method, "HEAD")) {
+        return HTTP_REQUEST_METHOD_HEAD;
+    }
+    return -1;
+}
+
+// 只会清理内部资源，不会free(thiz)
+void http_request_teardown(HttpRequest *thiz)
+{
+    return_if_fail(thiz != NULL);
+    if (HTTP_HEADERS_TYPE_MAP == thiz->headers_type) {
+        if (thiz->map_headers != NULL) {
+            http_headers_destroy(thiz->map_headers);
+        }
+    }
+}
+
+// 调用http_request_teardown, 返回free(thiz)
+void http_request_destroy(HttpRequest *thiz)
+{
+    return_if_fail(thiz != NULL);
+    http_request_teardown(thiz);
+    free(thiz);
+}
+

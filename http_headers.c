@@ -104,6 +104,7 @@ void http_headers_remove(HttpHeaders *thiz, const char *key)
 {
     Iterator *iter = NULL;
     return_if_fail(thiz != NULL && key != NULL);
+    if (list_empty(thiz->headers)) return;
     // 使用迭代器既不会有太大损耗又不会暴露数据
     for (iter = list_begin(thiz->headers); !iterator_is_done(iter); iterator_next(iter)) {
         HttpHeader *header = (HttpHeader*)iterator_data(iter);
@@ -123,13 +124,15 @@ const char** http_headers_keys(HttpHeaders *thiz)
     int i = 0;
     return_value_if_fail(thiz != NULL, NULL);
     thiz->keys[0] = '\0';
-    for (iter = list_begin(thiz->headers); !iterator_is_done(iter); iterator_next(iter)) {
-        header = (HttpHeader*)iterator_data(iter);
-        strcpy(thiz->keys + offset, header->key);
-        thiz->pkeys[i++] = (thiz->keys + offset);
-        offset += strlen(header->key) + 1; // 跳过'\0'
+    if (!list_empty(thiz->headers)) {
+        for (iter = list_begin(thiz->headers); !iterator_is_done(iter); iterator_next(iter)) {
+            header = (HttpHeader*)iterator_data(iter);
+            strcpy(thiz->keys + offset, header->key);
+            thiz->pkeys[i++] = (thiz->keys + offset);
+            offset += strlen(header->key) + 1; // 跳过'\0'
+        }
+        if (iter) iterator_destroy(iter);
     }
-    if (iter) iterator_destroy(iter);
     thiz->pkeys[i] = NULL;
     return (const char**)thiz->pkeys;
 }
@@ -141,6 +144,12 @@ const char* http_headers_get(HttpHeaders *thiz, const char *key)
     // 线查找是否存在，如果存在，则将内容追加到尾部否则才会创建新的
     header = (HttpHeader*)list_find(thiz->headers, (DataCompareFunc)http_header_compare, (void*)key);
     return (header != NULL) ? header->value : NULL;
+}
+
+int http_headers_has(HttpHeaders *thiz, const char *key)
+{
+    return_value_if_fail(thiz != NULL && key != NULL, 0);
+    return http_headers_get(thiz, key) != NULL;
 }
 
 #ifdef TEST_HTTP_HEADERS

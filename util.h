@@ -41,4 +41,13 @@ typedef struct _Url {
  */
 void url_parse(const char *surl, Url *url);
 
+/*!
+ * \brief _stricmp 忽略大小写比较两个字符串的大小关系
+ * 
+ * 提供这个函数主要是为了解决msys2上string.h不包含stricmp函数问题
+ * 
+ * \retval 0=> s1 == s2, -1 => s1 < s2, 1 => s1 > s2
+ */
+int _stricmp(const char *s1, const char *s2);
+
 #endif //UTIL_H_H

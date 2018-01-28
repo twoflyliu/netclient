@@ -28,6 +28,12 @@ typedef struct _LoggerEvent {
 
 const char * logger_level_string(LoggerLevel level);
 
+/*!
+ *  \brief logger_level_from_string 将字符串转换为LoggerLevel类型
+ *  \retval 如果返回值>=0，表示成功，否则表示未知级别字符串  
+ */
+int logger_level_from_string(const char *level_string); 
+
 void notifier_fatal(Notifier *notifier, Protocol protocol, const char *url,
         const char *file, int line, const char *fmt, ...);
 

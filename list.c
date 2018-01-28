@@ -202,13 +202,15 @@ void* list_find(List *thiz, DataCompareFunc cmp, void *ctx)
 
 Iterator* list_begin(List *thiz)
 {
-    return_value_if_fail(thiz != NULL && thiz->head != NULL, NULL);
+    return_value_if_fail(thiz != NULL, NULL);
+    if (NULL == thiz->head) return NULL;
     return list_iterator_create(thiz, thiz->head);
 }
 
 Iterator* list_rbegin(List *thiz)
 {
-    return_value_if_fail(thiz != NULL && thiz->tail != NULL, NULL);
+    return_value_if_fail(thiz != NULL, NULL);
+    if (NULL == thiz->tail) return NULL;
     return list_reverse_iterator_create(thiz, thiz->tail);
 }
 
@@ -302,6 +304,12 @@ static Iterator *list_reverse_iterator_create(List *list, Node *node)
 void list_iterator_destroy(Iterator *thiz)
 {
     free(thiz);
+}
+
+int list_empty(List *thiz)
+{
+    return_value_if_fail(thiz != NULL, 1);
+    return thiz->head == NULL;
 }
 
 #ifdef TEST_LIST

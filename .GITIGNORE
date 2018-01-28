@@ -4,3 +4,6 @@
 *.rm2
 *.xmind
 *.stackdump
+*.so
+.*
+*.a

@@ -10,5 +10,6 @@ void http_headers_add(HttpHeaders *thiz, const char *key, const char *value);
 void http_headers_remove(HttpHeaders *thiz, const char *key);
 const char** http_headers_keys(HttpHeaders *thiz);
 const char* http_headers_get(HttpHeaders *thiz, const char *key);
+int http_headers_has(HttpHeaders *thiz, const char *key);
 
 #endif //HTTP_HEADERS_H_H

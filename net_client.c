@@ -215,6 +215,7 @@ void net_client_set_max_receive_rate(NetClient *thiz, int bytes_per_second)
 void net_client_set_timeout(NetClient *thiz, int sec)
 {
     Iterator *iter = NULL;
+    if (list_empty(thiz->clients)) return;
     for (iter = list_begin(thiz->clients); !iterator_is_done(iter); iterator_next(iter)) {
         ProtocolClient *client = (ProtocolClient*)iterator_data(iter);
         if (client->set_timeout) client->set_timeout(client ,sec);
@@ -228,6 +229,7 @@ void net_client_set_timeout(NetClient *thiz, int sec)
 void net_client_set_retry_count(NetClient *thiz, int count)
 {
     Iterator *iter = NULL;
+    if (list_empty(thiz->clients)) return;
     for (iter = list_begin(thiz->clients); !iterator_is_done(iter); iterator_next(iter)) {
         ProtocolClient *client = (ProtocolClient*)iterator_data(iter);
         if (client->set_retry_count) client->set_retry_count(client, count);

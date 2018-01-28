@@ -64,6 +64,7 @@ void list_destroy(List *thiz);
 void* list_get(List *thiz, size_t index);
 void* list_front(List *thiz);
 void* list_back(List *thiz);
+int list_empty(List *thiz); //检测list是否为空
 
 void list_push_back(List *thiz, void *data);
 void list_push_front(List *thiz, void *data);

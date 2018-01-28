@@ -7,8 +7,27 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <ctype.h>
 
 #include "util.h"
+
+int _stricmp(const char *s1, const char *s2)
+{
+    assert(s1 != NULL && s2 != NULL);
+    while (*s1 != '\0' && *s2 != '\0'
+            && toupper((int)*s1) == toupper((int)*s2)) {
+        ++s1;
+        ++s2;
+    }
+
+    if ('\0' == *s1 && '\0' == *s2) {
+        return 0;
+    } else if ('\0' == *s1) {
+        return -1;
+    } else {
+        return 1;
+    }
+}
 
 // 获取scheme
 // 返回指向主机的第一个字符
@@ -132,5 +151,6 @@ int main(void)
 
     return 0;
 }
+
 
 #endif

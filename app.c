@@ -18,9 +18,11 @@ void download(NetClient *client, const char *url)
     memset(&request, 0, sizeof(request));
     request.base.protocol = PROTOCOL_HTTP;
     request.base.url = url;
-    request.headers = (char**)headers;
+    request.headers_type = HTTP_HEADERS_TYPE_ARR;
+    request.array_headers = (char**)headers;
     request.method = HTTP_REQUEST_METHOD_GET;
     net_client_push_request(client, (Request*)&request);
+    http_request_teardown(&request);
 }
 
 int main(void)

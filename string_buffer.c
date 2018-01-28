@@ -67,11 +67,24 @@ void string_buffer_append(StringBuffer *thiz, const char *str)
     return_if_fail(thiz != NULL && str != NULL);
     str_len = strlen(str);
     if (_string_buffer_expand(thiz, str_len)) {
-        strcat(thiz->buf, str);
+        memcpy(thiz->buf + thiz->len, str, str_len); //因为内部可以保存二进制数据，所以不能使用strcat来连接字符串了
         thiz->len += str_len;
+        thiz->buf[thiz->len] = '\0'; //保证可以直接被打印
     } else {
         assert(0 && "non memory usable");
     }
+}
+
+void string_buffer_append_data(StringBuffer *thiz, const void *data, size_t datalen)
+{
+    return_if_fail(thiz != NULL && data != NULL && datalen > 0);
+    if (_string_buffer_expand(thiz, datalen)) {
+        memcpy(thiz->buf + thiz->len, data, datalen);
+        thiz->len += datalen;
+    } else {
+        assert(0 && "non memory usable");
+    }
+
 }
 
 char * string_buffer_c_str(StringBuffer *thiz)
