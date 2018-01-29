@@ -6,8 +6,10 @@
 
 ## 构建
 
-依赖unix环境或者类unix环境(主要是使用selector模型，如果是windows上，只需要实现自己的selector.c, 然后在makefile中修改一下，暂时不提供windows支持，如果
-想使用windows下体验，推荐安装msys2, 本项目就是在msys2环境下开发的)，openssl, lualib。
+依赖unix环境或者类unix环境(主要是使用selector模型，如果是windows上，只需要实现自己的selector替换掉selector_posix.c，windows上应该有类似功能的api,需要自己进行适配, 然后在makefile中修改一下，暂时不提供windows支持，如果想使用windows下体验，推荐安装msys2, 本项目就是在msys2环境下开发的)，
+
+依赖库：openssl, lualib，openssl提供了socket_openssl.c中异步socket操作的支持,lua_downloader.c中依赖lua的头文件和库文件，当构建好后，方便
+使用test.lua来查看整个库的使用情况，方面整个框架的测试。
 
 试下如下命令:
 
@@ -116,17 +118,20 @@ return_if_fail, return_value_if_fail, 他们类似assert功能只是不像assert
 
 安装整个框架思路就是:
 
-- 定义具体的Ftp协议的Request子类（C风格的继承）FtpRequest,内部提供你需要的参数
-- 定义具体的Ftp协议的ProtocolClient实现类，内部实现具体的Ftp协议，并且按照之前的协议，内部如果要打印日志，使用logger.h提供的辅助函数，通过事件
-来打印消息，当整个协议处理完毕的时候，要构建自己的ResponseEvent, 你可以派生自己的FtpResponseEvent来增加自己需要增加的参数
+- 定义具体的Ftp协议的Request子类（C风格的继承）FtpRequest,内部提供Ftp需要的参数，当然要根据协议来。
+- 定义具体的Ftp协议的ProtocolClient实现类，内部实现具体的Ftp协议的Client部分，并且按照之前的设计要求，内部如果要打印日志，使用logger.h提供的辅助函数，通过事件
+来传递日志信息，当整个协议处理完毕的时候，要构建自己的ResponseEvent, 你可以派生自己的FtpResponseEvent来增加自己需要增加的参数，然后使用通知者将这个
+事件通知出去。
 - 然后在NetClient初始化的时候，使用net_client_register_protocol将自己的FtpClient的工厂方法给注册进去
-- 你定可以注册自己的事件监听器来处理FtpResponseEvent，或者使用直接注册ResponseEvent,然后调用reponse_event_add_handler方法，添加最忌的对于
+- 你定可以注册自己的事件监听器来处理FtpResponseEvent，或者使用直接注册ResponseEvent,然后调用reponse_event_add_handler方法，添加自己的对于
 Ftp协议的回调函数即可
 -
-- 在lua_downloaders.c中，你只需要实现157行的函数，实现227行的函数即可，总之在这个文件当中也是非常容易修改的，对于其他协议，你只需要在43行的表中，增加
-自己的协议所使用的字符串，和对应的Request的工厂函数（这个函数的具体实现只有你知道，因为这儿假设这个协议是你实现的），在254行中，在response_listener中
+- 在lua_downloaders.c中，你只需要在该文件的第157行的函数，实现第227行的函数即可，总之在这个文件当中也是非常容易修改的，对于其他协议，你只需要在第43行的表中，增加
+自己的协议所使用的字符串，和对应的Request的工厂函数（这个函数的具体实现只有你知道，因为这儿假设这个协议是你实现的），在第254行中，在response_listener中
 注册自己的对应协议的处理函数，并且实现你需要的处理函数即可（根据你的需求来自己实现）。
 
 ### 总结
 
-通过这个框架，第一次认识到oop只是一种思想，使用c语言也可是设计成oop风格，还是可以使用c语言来设置可扩展的程序。
+通过这个框架设计，可以看到，oop只是一种思想，c语言也可以实现，而且一开始就是使用c语言设计的。
+
+总之，整个框架设计，就是找到需求变得地方，和不变的地方，在变得地方使用接口隔离，然后利用一些设计模式上的技巧来尽量降低各个模块之间的耦合关系。
