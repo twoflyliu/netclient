@@ -11,9 +11,11 @@
 依赖库：openssl, lualib，openssl提供了socket_openssl.c中异步socket操作的支持,lua_downloader.c中依赖lua的头文件和库文件，当构建好后，方便
 使用test.lua来查看整个库的使用情况，方面整个框架的测试。
 
-试下如下命令:
+使用如下命令:
 
     make LUA_INCLUDE=lua头文件路径 LUA_LIB=lua库文件路径
+    
+如果不指定LUA_INCLUDE和LUA_LIB，那么默认的lua头文件路径是/usr/local/include, lua库文件所在路径就是/usr/local/lib 
   
 会在netclient命令生成libnetclient.so, libnetclient.a, app[.exe], nc.so
 
