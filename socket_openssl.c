@@ -38,9 +38,11 @@ static void openssl_setup()
     
     ssl_ctx = SSL_CTX_new(SSLv23_client_method());
     ERROR(ssl_ctx != NULL, "ssl ctx new failed!: %s\n", SSL_ERROR());
-    if (!SSL_CTX_load_verify_locations(ssl_ctx, "/usr/ssl/cert.pem", NULL)) {
-        ERROR(1, "ssl ctx new failed!: %s\n", SSL_ERROR());
-    }
+
+    // 加载证书位置，自己选择性设置
+    /*if (!SSL_CTX_load_verify_locations(ssl_ctx, "/usr/ssl/cert.pem", NULL)) {*/
+        /*ERROR(1, "ssl ctx new failed!: %s\n", SSL_ERROR());*/
+    /*}*/
 }
 
 __attribute__((destructor(101)))

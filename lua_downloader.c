@@ -336,6 +336,7 @@ static int l_nc_download(lua_State *L)
     NCClient *client = _check_client(L);
     Request *request = NULL;
     char url[BUFSIZ] = {0};
+    char key[BUFSIZ] = {0};
 
     luaL_argcheck(L, LUA_TTABLE == lua_type(L, 2) 
             || LUA_TSTRING == lua_type(L, 2), 2, "'table' or 'string' expected");
@@ -351,7 +352,9 @@ static int l_nc_download(lua_State *L)
     lua_gettable(L, LUA_REGISTRYINDEX);
     assert(LUA_TTABLE == lua_type(L, -1)); //先获取私有表
     lua_pushvalue(L, -2); //回调函数
-    lua_setfield(L, -2, _key_of_callback_from_request(request, url, sizeof(url))); //url 只是相当于一个缓冲区
+
+    // linux不能把url，当做缓冲区，windows msys2上检测是行的，解决使用单独的缓冲区来构成key
+    lua_setfield(L, -2, _key_of_callback_from_request(request, key, sizeof(key))); //url 只是相当于一个缓冲区
     lua_pop(L, 1);  //还原栈结构
     return 0;
 }

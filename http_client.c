@@ -73,7 +73,8 @@ typedef struct _ClientPrivInfo {
     int timeout;
     int retry_count;
     int method;
-    char url[PATH_MAX];
+    char url[PATH_MAX];  // 当前url
+    char ourl[PATH_MAX]; // 原始的url,因为可能会发生重定向，所以要保留原始url
 
     int stat;
     time_t tprev; //上次执行时间
@@ -120,6 +121,7 @@ ProtocolClient *http_protocol_client_create(Notifier *notifier,
 
         priv->method = req->method;
         strcpy(priv->url, req->base.url);
+        strcpy(priv->ourl, req->base.url);
 
         // 初始化请求数据
         if (NULL != http_request->data) {
@@ -134,7 +136,7 @@ ProtocolClient *http_protocol_client_create(Notifier *notifier,
 
         memset(&priv->response, 0, sizeof(priv->response));
         priv->response.base.protocol = PROTOCOL_HTTP;
-        priv->response.base.url = priv->url;
+        priv->response.base.url = priv->ourl; // 相应的url中，始终保存的是原始的url
         priv->response.request_method = http_request->method;
     }
     return thiz;

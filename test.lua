@@ -1,4 +1,4 @@
-#!/usr/bin/env lua
+#!/usr/bin/env lua5.3
 local nc = require("nc").new("error") --里面参数是调试级别
 local logging = require("logging")
 

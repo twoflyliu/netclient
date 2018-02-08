@@ -75,10 +75,14 @@ void notifier_remove_event_listener(Notifier *thiz, int protocol,
 static void _notifier_notify(Notifier *thiz, Protocol protocol, Event *event)
 {
     List *list = thiz->listeners[protocol];
+    Iterator *iter = NULL;
     if (NULL == list) return;
-    for (Iterator *iter = list_begin(list); !iterator_is_done(iter); iterator_next(iter)) {
+    for (iter = list_begin(list); !iterator_is_done(iter); iterator_next(iter)) {
         EventListener *listener = (EventListener*)iterator_data(iter);
         listener->handle(listener, event);
+    }
+    if (iter != NULL) {
+        iterator_destroy(iter);
     }
 }
 
